@@ -1,0 +1,160 @@
+.dsh-history-edit-trigger {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  box-sizing: border-box;
+  inline-size: 22px !important;
+  block-size: 22px !important;
+  min-inline-size: 0 !important;
+  min-block-size: 0 !important;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm, 6px);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, currentColor);
+  cursor: pointer;
+}
+
+.dsh-history-edit-trigger > svg {
+  display: block;
+  inline-size: 13px !important;
+  block-size: 13px !important;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dsh-history-edit-trigger:hover,
+.dsh-history-edit-trigger:focus-visible {
+  color: var(--dsw-alias-label-secondary, currentColor);
+  background: var(--dsw-alias-interactive-bg-hover, transparent);
+}
+
+[data-chat-node-key] .dsh-history-edit-trigger[aria-disabled="true"] {
+  cursor: help;
+}
+
+@media (hover: hover) {
+  [data-chat-node-key]:not(:hover):not(:focus-within) .dsh-history-edit-trigger {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+[data-message-bubble][data-dsh-history-edit-hidden],
+[data-dsh-history-editing] [data-slot="conversation.chat.node"] [data-clock="start"],
+[data-dsh-history-shadowed] {
+  display: none !important;
+}
+
+.dsh-history-editor {
+  box-sizing: border-box;
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--dsw-alias-interactive-bg-hover-solid, color-mix(in srgb, CanvasText 6%, Canvas));
+  color: var(--dsw-alias-label-primary, currentColor);
+  font: inherit;
+}
+
+form.dsh-history-editor > textarea {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  min-height: 46px;
+  max-height: 48vh;
+  padding: 0;
+  field-sizing: content;
+  overflow: auto;
+  resize: none;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.5;
+  tab-size: 4;
+}
+
+.dsh-history-editor:has(textarea:focus-visible) {
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2, #80808055);
+}
+
+.dsh-history-editor button:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-secondary, currentColor);
+  outline-offset: 2px;
+}
+
+.dsh-history-edit-status {
+  color: var(--dsw-alias-label-secondary, currentColor);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dsh-history-edit-status:empty {
+  display: none;
+}
+
+.dsh-history-edit-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dsh-history-edit-impact {
+  color: var(--dsw-alias-label-tertiary, currentColor);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.dsh-history-edit-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+.dsh-history-edit-buttons button {
+  box-sizing: border-box;
+  height: 29px;
+  min-height: 0;
+  padding: 0 11px;
+  border: 0.5px solid var(--dsw-alias-border-l2, #80808055);
+  border-radius: 9px;
+  background: Canvas;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.dsh-history-edit-buttons button:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, transparent);
+}
+
+.dsh-history-edit-buttons .dsh-history-edit-primary {
+  border-color: transparent;
+  background: var(--dsw-alias-button-primary-fill, CanvasText);
+  color: var(--dsw-alias-label-primary-foreground, Canvas);
+}
+
+.dsh-history-edit-buttons .dsh-history-edit-primary:hover:not(:disabled) {
+  background: var(--dsw-alias-button-primary-hover, CanvasText);
+}
+
+.dsh-history-edit-buttons button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
