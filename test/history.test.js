@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { apply } from '../index.js'
-import { containsContent, editedContent, markerKind, originalText, replacementRanges, wasReplaced } from '../src/history.js'
+import { containsContent, editedContent, markerKind, originalText, replacementRanges, textsEqual, wasReplaced } from '../src/history.js'
 
 const text = value => ({ type: 'text', text: value })
 const image = { type: 'image', attachment: { attachmentId: 'image-id' } }
@@ -18,8 +18,15 @@ test('preserves raw text segmentation and exact attachment references', () => {
   assert.equal(containsContent([image]), true)
 })
 
-test('only hides old ranges from this plugin', () => {
-  const entry = (start, end, kind) => ({ type: 'event', event: {
+test('compares text segments positionally before anyone submits', () => {
+  assert.equal(textsEqual(['a', 'b'], ['a', 'b']), true)
+  assert.equal(textsEqual([], []), true)
+  assert.equal(textsEqual(['a'], ['a', 'b']), false)
+  assert.equal(textsEqual(['a', 'b'], ['b', 'a']), false)
+  assert.equal(textsEqual(['a'], ['a ']), false)
+})
+
+test('only hides old ranges from this plugin', () => {  const entry = (start, end, kind) => ({ type: 'event', event: {
     type: 'user/message', seq: end, surfaceOp: { op: 'replace', startSeq: start }, data: { source: { kind } },
   } })
   const ranges = replacementRanges([entry(11, 24, markerKind), entry(2, 4, 'another-plugin'), entry(40, 50, markerKind)])
@@ -73,6 +80,22 @@ test('replaces a surface on one agent and follows up once with exact file and im
   assert.deepEqual(writes[1].content, [text('NEW'), image, file])
   assert.equal((await run()).status, 409)
   assert.equal(writes.length, 2)
+})
+
+test('refuses an unchanged body unless the round is being retried', async () => {
+  const plain = fixture()
+  const refused = await plain.run({ texts: ['old'] })
+  assert.equal(refused.status, 400)
+  assert.match((await refused.json()).error, /请先修改消息正文/)
+  assert.equal(plain.writes.length, 0)
+  assert.equal((await plain.run({ texts: ['old'], retry: 'yes' })).status, 400)
+  assert.equal(plain.writes.length, 0)
+
+  const retried = fixture()
+  assert.deepEqual(await (await retried.run({ texts: ['old'], retry: true })).json(), { ok: true })
+  assert.equal(retried.writes.length, 2)
+  assert.deepEqual(retried.writes[1].content, [text('old')])
+  assert.equal(retried.writes[1].source.kind, 'user')
 })
 
 test('refuses stale identity, existing queue, and unreadable attachments without writing', async () => {

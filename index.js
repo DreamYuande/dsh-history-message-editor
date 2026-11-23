@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { containsContent, editedContent, findBlockReason, markerKind, originalText, overridePath } from './src/history.js'
+import { containsContent, editedContent, findBlockReason, markerKind, originalText, overridePath, textsEqual } from './src/history.js'
 
 export const name = 'history-message-editor'
 export const inject = ['connection', 'sessionController', 'agents', 'attachments', 'llm']
@@ -17,7 +17,8 @@ function validateRequest(body) {
     Number.isSafeInteger(body.seq) && body.seq >= 0 &&
     Number.isSafeInteger(body.head) && body.head >= body.seq &&
     Array.isArray(body.texts) && body.texts.length > 0 &&
-    body.texts.every(text => typeof text === 'string')
+    body.texts.every(text => typeof text === 'string') &&
+    (body.retry === undefined || body.retry === true)
 }
 
 function userMessage(content, kind) {
@@ -41,7 +42,11 @@ function plan(session, request) {
   if (blocked) throw new OverrideError(blocked)
   const originals = originalText(event.data.content)
   if (originals.length !== request.texts.length) throw new OverrideError('原消息的正文结构已变化。')
-  if (originals.every((part, i) => part === request.texts[i])) throw new OverrideError('请先修改消息正文。', 400)
+  // An unchanged body is only meaningful as a retry: the round is re-asked with
+  // identical content instead of an edited one.
+  if (textsEqual(originals, request.texts) && request.retry !== true) {
+    throw new OverrideError('请先修改消息正文。', 400)
+  }
   const content = editedContent(event.data.content, request.texts)
   if (!containsContent(content)) throw new OverrideError('消息正文不能为空。', 400)
   return { content, shadowed: session.surface.nodes.slice(index) }

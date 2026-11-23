@@ -2,7 +2,7 @@ window.__ModuleLoader__.load({
   id: "dsh-history-message-editor",
   factory: () => {
     'use strict'
-    const stylesheet = ".dsh-history-edit-trigger {\n  display: inline-grid;\n  place-items: center;\n  flex: none;\n  box-sizing: border-box;\n  inline-size: 22px !important;\n  block-size: 22px !important;\n  min-inline-size: 0 !important;\n  min-block-size: 0 !important;\n  padding: 0;\n  border: 0;\n  border-radius: var(--dsw-radius-sm, 6px);\n  background: transparent;\n  color: var(--dsw-alias-label-tertiary, currentColor);\n  cursor: pointer;\n}\n\n.dsh-history-edit-trigger > svg {\n  display: block;\n  inline-size: 13px !important;\n  block-size: 13px !important;\n  fill: none;\n  stroke: currentColor;\n  stroke-width: 1.1;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.dsh-history-edit-trigger:hover,\n.dsh-history-edit-trigger:focus-visible {\n  color: var(--dsw-alias-label-secondary, currentColor);\n  background: var(--dsw-alias-interactive-bg-hover, transparent);\n}\n\n[data-chat-node-key] .dsh-history-edit-trigger[aria-disabled=\"true\"] {\n  cursor: help;\n}\n\n@media (hover: hover) {\n  [data-chat-node-key]:not(:hover):not(:focus-within) .dsh-history-edit-trigger {\n    opacity: 0;\n    pointer-events: none;\n  }\n}\n\n[data-message-bubble][data-dsh-history-edit-hidden],\n[data-dsh-history-editing] [data-slot=\"conversation.chat.node\"] [data-clock=\"start\"],\n[data-dsh-history-shadowed] {\n  display: none !important;\n}\n\n.dsh-history-editor {\n  box-sizing: border-box;\n  display: grid;\n  gap: 10px;\n  width: 100%;\n  padding: 14px;\n  border: 0;\n  border-radius: 16px;\n  background: var(--dsw-alias-interactive-bg-hover-solid, color-mix(in srgb, CanvasText 6%, Canvas));\n  color: var(--dsw-alias-label-primary, currentColor);\n  font: inherit;\n}\n\nform.dsh-history-editor > textarea {\n  box-sizing: border-box;\n  min-width: 0;\n  width: 100%;\n  min-height: 46px;\n  max-height: 48vh;\n  padding: 0;\n  field-sizing: content;\n  overflow: auto;\n  resize: none;\n  border: 0 !important;\n  outline: none !important;\n  box-shadow: none !important;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  line-height: 1.5;\n  tab-size: 4;\n}\n\n.dsh-history-editor:has(textarea:focus-visible) {\n  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2, #80808055);\n}\n\n.dsh-history-editor button:focus-visible {\n  outline: 2px solid var(--dsw-alias-label-secondary, currentColor);\n  outline-offset: 2px;\n}\n\n.dsh-history-edit-status {\n  color: var(--dsw-alias-label-secondary, currentColor);\n  font-size: 12px;\n  line-height: 1.4;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.dsh-history-edit-status:empty {\n  display: none;\n}\n\n.dsh-history-edit-footer {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px 12px;\n  align-items: center;\n  justify-content: space-between;\n}\n\n.dsh-history-edit-impact {\n  color: var(--dsw-alias-label-tertiary, currentColor);\n  font-size: 11px;\n  line-height: 16px;\n}\n\n.dsh-history-edit-buttons {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n  gap: 6px;\n  margin-inline-start: auto;\n}\n\n.dsh-history-edit-buttons button {\n  box-sizing: border-box;\n  height: 29px;\n  min-height: 0;\n  padding: 0 11px;\n  border: 0.5px solid var(--dsw-alias-border-l2, #80808055);\n  border-radius: 9px;\n  background: Canvas;\n  color: inherit;\n  font: inherit;\n  font-size: 12px;\n  line-height: 18px;\n  cursor: pointer;\n}\n\n.dsh-history-edit-buttons button:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover, transparent);\n}\n\n.dsh-history-edit-buttons .dsh-history-edit-primary {\n  border-color: transparent;\n  background: var(--dsw-alias-button-primary-fill, CanvasText);\n  color: var(--dsw-alias-label-primary-foreground, Canvas);\n}\n\n.dsh-history-edit-buttons .dsh-history-edit-primary:hover:not(:disabled) {\n  background: var(--dsw-alias-button-primary-hover, CanvasText);\n}\n\n.dsh-history-edit-buttons button:disabled {\n  cursor: wait;\n  opacity: 0.65;\n}\n"
+    const stylesheet = ".dsh-history-edit-trigger,\n.dsh-history-retry-trigger {\n  display: inline-grid;\n  place-items: center;\n  flex: none;\n  box-sizing: border-box;\n  inline-size: 22px !important;\n  block-size: 22px !important;\n  min-inline-size: 0 !important;\n  min-block-size: 0 !important;\n  padding: 0;\n  border: 0;\n  border-radius: var(--dsw-radius-sm, 6px);\n  background: transparent;\n  color: var(--dsw-alias-label-tertiary, currentColor);\n  cursor: pointer;\n}\n\n.dsh-history-edit-trigger > svg,\n.dsh-history-retry-trigger > svg {\n  display: block;\n  inline-size: 13px !important;\n  block-size: 13px !important;\n  fill: none;\n  stroke: currentColor;\n  stroke-width: 1.1;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n/* The retry glyph keeps a 24px view box, so it needs a denser stroke. */\n.dsh-history-retry-trigger > svg {\n  stroke-width: 2;\n}\n\n.dsh-history-edit-trigger:hover,\n.dsh-history-edit-trigger:focus-visible,\n.dsh-history-retry-trigger:hover,\n.dsh-history-retry-trigger:focus-visible {\n  color: var(--dsw-alias-label-secondary, currentColor);\n  background: var(--dsw-alias-interactive-bg-hover, transparent);\n}\n\n[data-chat-node-key] .dsh-history-edit-trigger[aria-disabled=\"true\"],\n[data-chat-node-key] .dsh-history-retry-trigger[aria-disabled=\"true\"] {\n  cursor: help;\n}\n\n.dsh-history-retry-trigger[data-busy] {\n  color: var(--dsw-alias-label-tertiary, currentColor);\n  cursor: progress;\n}\n\n.dsh-history-retry-trigger[data-busy] > svg {\n  animation: dsh-history-spin 0.9s linear infinite;\n}\n\n@keyframes dsh-history-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .dsh-history-retry-trigger[data-busy] > svg {\n    animation-duration: 2.4s;\n  }\n}\n\n@media (hover: hover) {\n  [data-chat-node-key]:not(:hover):not(:focus-within) .dsh-history-edit-trigger,\n  [data-chat-node-key]:not(:hover):not(:focus-within) .dsh-history-retry-trigger {\n    opacity: 0;\n    pointer-events: none;\n  }\n}\n\n[data-message-bubble][data-dsh-history-edit-hidden],\n[data-dsh-history-editing] [data-slot=\"conversation.chat.node\"] [data-clock=\"start\"],\n[data-dsh-history-shadowed] {\n  display: none !important;\n}\n\n.dsh-history-editor {\n  box-sizing: border-box;\n  display: grid;\n  gap: 10px;\n  width: 100%;\n  padding: 14px;\n  border: 0;\n  border-radius: 16px;\n  background: var(--dsw-alias-interactive-bg-hover-solid, color-mix(in srgb, CanvasText 6%, Canvas));\n  color: var(--dsw-alias-label-primary, currentColor);\n  font: inherit;\n}\n\nform.dsh-history-editor > textarea {\n  box-sizing: border-box;\n  min-width: 0;\n  width: 100%;\n  min-height: 46px;\n  max-height: 48vh;\n  padding: 0;\n  field-sizing: content;\n  overflow: auto;\n  resize: none;\n  border: 0 !important;\n  outline: none !important;\n  box-shadow: none !important;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  line-height: 1.5;\n  tab-size: 4;\n}\n\n.dsh-history-editor:has(textarea:focus-visible) {\n  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2, #80808055);\n}\n\n.dsh-history-editor button:focus-visible {\n  outline: 2px solid var(--dsw-alias-label-secondary, currentColor);\n  outline-offset: 2px;\n}\n\n.dsh-history-edit-status {\n  color: var(--dsw-alias-label-secondary, currentColor);\n  font-size: 12px;\n  line-height: 1.4;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.dsh-history-edit-status:empty {\n  display: none;\n}\n\n.dsh-history-edit-footer {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px 12px;\n  align-items: center;\n  justify-content: space-between;\n}\n\n.dsh-history-edit-impact {\n  color: var(--dsw-alias-label-tertiary, currentColor);\n  font-size: 11px;\n  line-height: 16px;\n}\n\n.dsh-history-edit-buttons {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n  gap: 6px;\n  margin-inline-start: auto;\n}\n\n.dsh-history-edit-buttons button {\n  box-sizing: border-box;\n  height: 29px;\n  min-height: 0;\n  padding: 0 11px;\n  border: 0.5px solid var(--dsw-alias-border-l2, #80808055);\n  border-radius: 9px;\n  background: Canvas;\n  color: inherit;\n  font: inherit;\n  font-size: 12px;\n  line-height: 18px;\n  cursor: pointer;\n}\n\n.dsh-history-edit-buttons button:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover, transparent);\n}\n\n.dsh-history-edit-buttons .dsh-history-edit-primary {\n  border-color: transparent;\n  background: var(--dsw-alias-button-primary-fill, CanvasText);\n  color: var(--dsw-alias-label-primary-foreground, Canvas);\n}\n\n.dsh-history-edit-buttons .dsh-history-edit-primary:hover:not(:disabled) {\n  background: var(--dsw-alias-button-primary-hover, CanvasText);\n}\n\n.dsh-history-editor[data-pristine] .dsh-history-edit-primary,\n.dsh-history-edit-buttons button:disabled {\n  cursor: default;\n  opacity: 0.45;\n}\n\n/* An untouched body greys the primary action out instead of prompting for a change. */\n.dsh-history-editor[data-pristine] .dsh-history-edit-primary {\n  border-color: transparent;\n  background: var(--dsw-alias-interactive-bg-hover-solid, color-mix(in srgb, CanvasText 8%, Canvas));\n  color: var(--dsw-alias-label-tertiary, color-mix(in srgb, CanvasText 45%, Canvas));\n  opacity: 1;\n}\n\n.dsh-history-editor[aria-busy=\"true\"] .dsh-history-edit-buttons button:disabled {\n  cursor: progress;\n  opacity: 0.7;\n}\n\n.dsh-history-editor[aria-busy=\"true\"] .dsh-history-edit-primary:disabled {\n  background: var(--dsw-alias-button-primary-fill, CanvasText);\n  color: var(--dsw-alias-label-primary-foreground, Canvas);\n}\n\n.dsh-history-toast-layer {\n  position: fixed;\n  z-index: 2147483000;\n  inset-block-end: 32px;\n  inset-inline: 0;\n  display: flex;\n  justify-content: center;\n  pointer-events: none;\n}\n\n.dsh-history-toast {\n  box-sizing: border-box;\n  max-width: min(520px, calc(100vw - 48px));\n  padding: 8px 12px;\n  border: 0.5px solid var(--dsw-alias-border-l2, #80808055);\n  border-radius: 10px;\n  background: var(--dsw-specific-input-major, Canvas);\n  box-shadow: var(--dsw-elevation-soft, 0 6px 20px #0000001f);\n  color: var(--dsw-alias-label-primary, CanvasText);\n  font: inherit;\n  font-size: 12px;\n  line-height: 1.5;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n  pointer-events: auto;\n  cursor: pointer;\n}\n"
     const markerKind = 'dsh-history-message-editor'
 const overridePath = '/api/history-message-editor/v1/regenerate'
 
@@ -33,6 +33,10 @@ function containsContent(parts) {
   return parts.some(part => part.type !== 'text' || part.text.trim() !== '')
 }
 
+function textsEqual(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
 function replacementRanges(entries) {
   const ranges = []
   for (const { type, event } of entries) {
@@ -56,6 +60,7 @@ const rowSelector = '[data-chat-node-key]:is([data-chat-flow-kind="user"], [data
 const actionSelector = '[data-slot="conversation.chat.node"] [data-clock="start"]'
 const bubbleSelector = '[data-message-bubble]'
 const editLabel = '编辑消息'
+const retryLabel = '重试这一轮'
 
 function element(tag, className, text) {
   const node = document.createElement(tag)
@@ -81,6 +86,19 @@ function editIcon() {
   return svg
 }
 
+function retryIcon() {
+  const ns = 'http://www.w3.org/2000/svg'
+  const svg = document.createElementNS(ns, 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  const arc = document.createElementNS(ns, 'path')
+  arc.setAttribute('d', 'M21 12a9 9 0 1 1-9-9c2.5 0 4.9 1 6.7 2.7L21 8')
+  const head = document.createElementNS(ns, 'path')
+  head.setAttribute('d', 'M21 3v5h-5')
+  svg.append(arc, head)
+  return svg
+}
+
 function apply(ctx) {
   const { sessions, uiConversation } = ctx
   if (typeof sessions.retainInfo !== 'function' || typeof uiConversation.binding !== 'function') return
@@ -94,6 +112,30 @@ function mountEditor(sessions, conversation) {
   style.dataset.dshHistoryEditorStyle = ''
   style.textContent = stylesheet
   document.head.append(style)
+
+  const toasts = element('div', 'dsh-history-toast-layer')
+  document.body.append(toasts)
+  let toast = null
+  let toastTimer = 0
+
+  function hideToast() {
+    clearTimeout(toastTimer)
+    toastTimer = 0
+    toast?.remove()
+    toast = null
+  }
+
+  function notify(text) {
+    if (!toast) {
+      toast = element('div', 'dsh-history-toast')
+      toast.setAttribute('role', 'status')
+      toast.addEventListener('click', hideToast)
+      toasts.append(toast)
+    }
+    toast.textContent = text
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(hideToast, 6000)
+  }
 
   const controls = new Map()
   const watched = new Map()
@@ -212,9 +254,11 @@ function mountEditor(sessions, conversation) {
     syncVisibility()
     for (const [row, entry] of controls) {
       const sessionId = row.closest(contentSelector)?.dataset.conversationSession
-      if (!row.isConnected || !entry.control.isConnected || sessionId !== entry.sessionId ||
-          row.dataset.chatNodeKey !== entry.key || !isMain(sessionId) || shadowed.has(row)) {
+      if (!row.isConnected || !entry.control.isConnected || !entry.retry.isConnected ||
+          sessionId !== entry.sessionId || row.dataset.chatNodeKey !== entry.key ||
+          !isMain(sessionId) || shadowed.has(row)) {
         entry.control.remove()
+        entry.retry.remove()
         controls.delete(row)
       }
     }
@@ -223,18 +267,28 @@ function mountEditor(sessions, conversation) {
       const actions = row.querySelector(actionSelector)
       const record = actions && recordsFor(row)
       if (!record) continue
+      const reason = findBlockReason(record.node)
       const control = button('', 'dsh-history-edit-trigger')
       control.setAttribute('aria-label', editLabel)
-      const reason = findBlockReason(record.node)
       control.title = reason || editLabel
       if (reason) control.setAttribute('aria-disabled', 'true')
       control.append(editIcon())
       control.addEventListener('click', () => {
         const current = recordsFor(row)
-        if (current && !reason && !operation) openEditor(current, row, actions)
+        if (current && !findBlockReason(current.node) && !operation) openEditor(current, row, actions)
       })
-      actions.append(control)
-      controls.set(row, { control, actions, sessionId: record.sessionId, key: record.node.key })
+      const retry = button('', 'dsh-history-retry-trigger')
+      retry.setAttribute('aria-label', retryLabel)
+      retry.title = reason || '重试这一轮：覆盖此条及后续对话并重新生成'
+      if (reason) retry.setAttribute('aria-disabled', 'true')
+      retry.append(retryIcon())
+      retry.addEventListener('click', () => {
+        const current = recordsFor(row)
+        if (!current || findBlockReason(current.node)) return
+        if (!operation) void retryRound(current, retry)
+      })
+      actions.append(control, retry)
+      controls.set(row, { control, retry, actions, sessionId: record.sessionId, key: record.node.key })
     }
     if (editor) {
       const entry = [...controls].find(([, entry]) => entry.sessionId === editor.sessionId && entry.key === editor.node.key)
@@ -270,10 +324,10 @@ function mountEditor(sessions, conversation) {
   })
   requestSweep()
 
-  function blocked(draft) {
-    const state = draft.binding.session.getSnapshot()
+  function blocked(record, action = '编辑') {
+    const state = record.binding.session.getSnapshot()
     if (state.running || state.awaitingFirstTurn || state.pendingSubmissions?.length) {
-      return '等当前回复和正在提交的输入结束后再编辑。'
+      return `等当前回复和正在提交的输入结束后再${action}。`
     }
     if (state.openState !== 'open' || state.removed || state.loadingOlder) {
       return '等当前会话的历史加载完成后再试。'
@@ -283,6 +337,16 @@ function mountEditor(sessions, conversation) {
 
   function currentHead(binding) {
     return binding.eventSource.getSnapshot().entries.findLast(entry => entry.type === 'event')?.event.seq
+  }
+
+  function pristine(draft) {
+    return textsEqual(draft.fields.map(field => field.value), draft.initial)
+  }
+
+  function syncSave(draft) {
+    const idle = draft.save.dataset.busy !== 'busy'
+    draft.save.disabled = !idle || pristine(draft)
+    draft.form.toggleAttribute('data-pristine', pristine(draft))
   }
 
   function openEditor(record, row, actions) {
@@ -324,9 +388,11 @@ function mountEditor(sessions, conversation) {
     editor = draft
     placeForm(draft, row, actions)
     status.textContent = blocked(draft)
+    syncSave(draft)
     dismiss.addEventListener('click', () => endEdit(true))
     form.addEventListener('input', () => {
       status.textContent = ''
+      syncSave(draft)
     })
     form.addEventListener('keydown', event => {
       if (event.key === 'Escape' && !operation) {
@@ -359,16 +425,16 @@ function mountEditor(sessions, conversation) {
     const { fields, raw, initial, form, status, save, dismiss, binding, node, sessionId, head } = draft
     const texts = fields.map((field, index) => field.value === initial[index] ? raw[index] : field.value)
     const parts = editedContent(node.data.content, texts)
-    if (texts.every((value, index) => value === raw[index])) {
-      status.textContent = '请先修改消息正文。'
-      return
-    }
+    // The primary button stays greyed out until the body changes, so this only
+    // guards a submit that raced the last input event.
+    if (textsEqual(texts, raw)) return
     if (!containsContent(parts)) {
       status.textContent = '消息正文不能为空。'
       return
     }
     operation = draft
     form.setAttribute('aria-busy', 'true')
+    save.dataset.busy = 'busy'
     for (const field of fields) field.readOnly = true
     dismiss.disabled = save.disabled = true
     save.textContent = '提交中…'
@@ -394,10 +460,44 @@ function mountEditor(sessions, conversation) {
     } finally {
       operation = null
       form.removeAttribute('aria-busy')
+      delete save.dataset.busy
       dismiss.disabled = false
       for (const field of fields) field.readOnly = false
-      save.disabled = false
       save.textContent = '发送'
+      syncSave(draft)
+    }
+  }
+
+  async function retryRound(record, control) {
+    const reason = blocked(record, '重试')
+    if (reason) {
+      notify(reason)
+      return
+    }
+    const { binding, node, sessionId } = record
+    const head = currentHead(binding)
+    const texts = originalText(node.data.content)
+    operation = { kind: 'retry' }
+    control.dataset.busy = 'busy'
+    control.setAttribute('aria-busy', 'true')
+    control.disabled = true
+    try {
+      const response = await fetch('.' + overridePath, {
+        method: 'POST', signal,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId, messageId: node.data.messageId, seq: node.data.seq, head, texts, retry: true }),
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok || result?.ok !== true) {
+        throw new Error(result?.error || 'DSH 未确认提交，请查看当前会话状态。')
+      }
+    } catch (error) {
+      if (!signal.aborted) notify(error instanceof Error ? error.message : 'DSH 未确认操作结果。')
+    } finally {
+      operation = null
+      delete control.dataset.busy
+      control.removeAttribute('aria-busy')
+      control.disabled = false
     }
   }
 
@@ -407,9 +507,14 @@ function mountEditor(sessions, conversation) {
     unsubscribe()
     cancelAnimationFrame(frame)
     endEdit()
+    hideToast()
+    toasts.remove()
     for (const record of watched.values()) record.dispose()
     for (const row of shadowed) row.removeAttribute('data-dsh-history-shadowed')
-    for (const { control } of controls.values()) control.remove()
+    for (const { control, retry } of controls.values()) {
+      control.remove()
+      retry.remove()
+    }
     controls.clear()
     style.remove()
   }

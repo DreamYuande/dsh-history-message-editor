@@ -6,6 +6,7 @@ const rowSelector = '[data-chat-node-key]:is([data-chat-flow-kind="user"], [data
 const actionSelector = '[data-slot="conversation.chat.node"] [data-clock="start"]'
 const bubbleSelector = '[data-message-bubble]'
 const editLabel = '编辑消息'
+const retryLabel = '重试这一轮'
 
 function element(tag, className, text) {
   const node = document.createElement(tag)
@@ -31,6 +32,19 @@ function editIcon() {
   return svg
 }
 
+function retryIcon() {
+  const ns = 'http://www.w3.org/2000/svg'
+  const svg = document.createElementNS(ns, 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  const arc = document.createElementNS(ns, 'path')
+  arc.setAttribute('d', 'M21 12a9 9 0 1 1-9-9c2.5 0 4.9 1 6.7 2.7L21 8')
+  const head = document.createElementNS(ns, 'path')
+  head.setAttribute('d', 'M21 3v5h-5')
+  svg.append(arc, head)
+  return svg
+}
+
 function apply(ctx) {
   const { sessions, uiConversation } = ctx
   if (typeof sessions.retainInfo !== 'function' || typeof uiConversation.binding !== 'function') return
@@ -44,6 +58,30 @@ function mountEditor(sessions, conversation) {
   style.dataset.dshHistoryEditorStyle = ''
   style.textContent = stylesheet
   document.head.append(style)
+
+  const toasts = element('div', 'dsh-history-toast-layer')
+  document.body.append(toasts)
+  let toast = null
+  let toastTimer = 0
+
+  function hideToast() {
+    clearTimeout(toastTimer)
+    toastTimer = 0
+    toast?.remove()
+    toast = null
+  }
+
+  function notify(text) {
+    if (!toast) {
+      toast = element('div', 'dsh-history-toast')
+      toast.setAttribute('role', 'status')
+      toast.addEventListener('click', hideToast)
+      toasts.append(toast)
+    }
+    toast.textContent = text
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(hideToast, 6000)
+  }
 
   const controls = new Map()
   const watched = new Map()
@@ -162,9 +200,11 @@ function mountEditor(sessions, conversation) {
     syncVisibility()
     for (const [row, entry] of controls) {
       const sessionId = row.closest(contentSelector)?.dataset.conversationSession
-      if (!row.isConnected || !entry.control.isConnected || sessionId !== entry.sessionId ||
-          row.dataset.chatNodeKey !== entry.key || !isMain(sessionId) || shadowed.has(row)) {
+      if (!row.isConnected || !entry.control.isConnected || !entry.retry.isConnected ||
+          sessionId !== entry.sessionId || row.dataset.chatNodeKey !== entry.key ||
+          !isMain(sessionId) || shadowed.has(row)) {
         entry.control.remove()
+        entry.retry.remove()
         controls.delete(row)
       }
     }
@@ -173,18 +213,28 @@ function mountEditor(sessions, conversation) {
       const actions = row.querySelector(actionSelector)
       const record = actions && recordsFor(row)
       if (!record) continue
+      const reason = findBlockReason(record.node)
       const control = button('', 'dsh-history-edit-trigger')
       control.setAttribute('aria-label', editLabel)
-      const reason = findBlockReason(record.node)
       control.title = reason || editLabel
       if (reason) control.setAttribute('aria-disabled', 'true')
       control.append(editIcon())
       control.addEventListener('click', () => {
         const current = recordsFor(row)
-        if (current && !reason && !operation) openEditor(current, row, actions)
+        if (current && !findBlockReason(current.node) && !operation) openEditor(current, row, actions)
       })
-      actions.append(control)
-      controls.set(row, { control, actions, sessionId: record.sessionId, key: record.node.key })
+      const retry = button('', 'dsh-history-retry-trigger')
+      retry.setAttribute('aria-label', retryLabel)
+      retry.title = reason || '重试这一轮：覆盖此条及后续对话并重新生成'
+      if (reason) retry.setAttribute('aria-disabled', 'true')
+      retry.append(retryIcon())
+      retry.addEventListener('click', () => {
+        const current = recordsFor(row)
+        if (!current || findBlockReason(current.node)) return
+        if (!operation) void retryRound(current, retry)
+      })
+      actions.append(control, retry)
+      controls.set(row, { control, retry, actions, sessionId: record.sessionId, key: record.node.key })
     }
     if (editor) {
       const entry = [...controls].find(([, entry]) => entry.sessionId === editor.sessionId && entry.key === editor.node.key)
@@ -220,10 +270,10 @@ function mountEditor(sessions, conversation) {
   })
   requestSweep()
 
-  function blocked(draft) {
-    const state = draft.binding.session.getSnapshot()
+  function blocked(record, action = '编辑') {
+    const state = record.binding.session.getSnapshot()
     if (state.running || state.awaitingFirstTurn || state.pendingSubmissions?.length) {
-      return '等当前回复和正在提交的输入结束后再编辑。'
+      return `等当前回复和正在提交的输入结束后再${action}。`
     }
     if (state.openState !== 'open' || state.removed || state.loadingOlder) {
       return '等当前会话的历史加载完成后再试。'
@@ -233,6 +283,16 @@ function mountEditor(sessions, conversation) {
 
   function currentHead(binding) {
     return binding.eventSource.getSnapshot().entries.findLast(entry => entry.type === 'event')?.event.seq
+  }
+
+  function pristine(draft) {
+    return textsEqual(draft.fields.map(field => field.value), draft.initial)
+  }
+
+  function syncSave(draft) {
+    const idle = draft.save.dataset.busy !== 'busy'
+    draft.save.disabled = !idle || pristine(draft)
+    draft.form.toggleAttribute('data-pristine', pristine(draft))
   }
 
   function openEditor(record, row, actions) {
@@ -274,9 +334,11 @@ function mountEditor(sessions, conversation) {
     editor = draft
     placeForm(draft, row, actions)
     status.textContent = blocked(draft)
+    syncSave(draft)
     dismiss.addEventListener('click', () => endEdit(true))
     form.addEventListener('input', () => {
       status.textContent = ''
+      syncSave(draft)
     })
     form.addEventListener('keydown', event => {
       if (event.key === 'Escape' && !operation) {
@@ -309,16 +371,16 @@ function mountEditor(sessions, conversation) {
     const { fields, raw, initial, form, status, save, dismiss, binding, node, sessionId, head } = draft
     const texts = fields.map((field, index) => field.value === initial[index] ? raw[index] : field.value)
     const parts = editedContent(node.data.content, texts)
-    if (texts.every((value, index) => value === raw[index])) {
-      status.textContent = '请先修改消息正文。'
-      return
-    }
+    // The primary button stays greyed out until the body changes, so this only
+    // guards a submit that raced the last input event.
+    if (textsEqual(texts, raw)) return
     if (!containsContent(parts)) {
       status.textContent = '消息正文不能为空。'
       return
     }
     operation = draft
     form.setAttribute('aria-busy', 'true')
+    save.dataset.busy = 'busy'
     for (const field of fields) field.readOnly = true
     dismiss.disabled = save.disabled = true
     save.textContent = '提交中…'
@@ -344,10 +406,44 @@ function mountEditor(sessions, conversation) {
     } finally {
       operation = null
       form.removeAttribute('aria-busy')
+      delete save.dataset.busy
       dismiss.disabled = false
       for (const field of fields) field.readOnly = false
-      save.disabled = false
       save.textContent = '发送'
+      syncSave(draft)
+    }
+  }
+
+  async function retryRound(record, control) {
+    const reason = blocked(record, '重试')
+    if (reason) {
+      notify(reason)
+      return
+    }
+    const { binding, node, sessionId } = record
+    const head = currentHead(binding)
+    const texts = originalText(node.data.content)
+    operation = { kind: 'retry' }
+    control.dataset.busy = 'busy'
+    control.setAttribute('aria-busy', 'true')
+    control.disabled = true
+    try {
+      const response = await fetch('.' + overridePath, {
+        method: 'POST', signal,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId, messageId: node.data.messageId, seq: node.data.seq, head, texts, retry: true }),
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok || result?.ok !== true) {
+        throw new Error(result?.error || 'DSH 未确认提交，请查看当前会话状态。')
+      }
+    } catch (error) {
+      if (!signal.aborted) notify(error instanceof Error ? error.message : 'DSH 未确认操作结果。')
+    } finally {
+      operation = null
+      delete control.dataset.busy
+      control.removeAttribute('aria-busy')
+      control.disabled = false
     }
   }
 
@@ -357,9 +453,14 @@ function mountEditor(sessions, conversation) {
     unsubscribe()
     cancelAnimationFrame(frame)
     endEdit()
+    hideToast()
+    toasts.remove()
     for (const record of watched.values()) record.dispose()
     for (const row of shadowed) row.removeAttribute('data-dsh-history-shadowed')
-    for (const { control } of controls.values()) control.remove()
+    for (const { control, retry } of controls.values()) {
+      control.remove()
+      retry.remove()
+    }
     controls.clear()
     style.remove()
   }

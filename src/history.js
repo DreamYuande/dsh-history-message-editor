@@ -28,6 +28,10 @@ export function containsContent(parts) {
   return parts.some(part => part.type !== 'text' || part.text.trim() !== '')
 }
 
+export function textsEqual(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
 export function replacementRanges(entries) {
   const ranges = []
   for (const { type, event } of entries) {
