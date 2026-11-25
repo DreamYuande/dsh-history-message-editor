@@ -37,19 +37,30 @@ test('only hides old ranges from this plugin', () => {  const entry = (start, en
   assert.equal(wasReplaced(ranges, 2), false)
 })
 
-function fixture({ pending = false, attachments = [], verify = () => {} } = {}) {
+function fixture({ pending = false, attachments = [], verify = () => {}, running = false } = {}) {
   const original = { type: 'user/message', data: { id: 'original', source: { kind: 'user' }, content: [text('old'), ...attachments] } }
   const writes = []
+  const calls = { cancel: 0 }
   const session = {
     seq: 10, eventAt: seq => seq === 4 ? original : undefined,
     surface: { nodes: [1, 4, 6, 8] },
     append: (...args) => { writes.push(args); session.seq++ },
   }
   const agent = {
-    session, status: 'idle', inbox: { hasPending: pending },
+    session, status: running ? 'running' : 'idle', inbox: { hasPending: pending },
     model: { current: () => undefined },
     runMaintenance: action => action(new AbortController().signal),
     followup: value => writes.push(value),
+    cancel: (cause, options) => {
+      calls.cancel++
+      calls.cause = cause
+      calls.options = options
+      agent.status = 'idle'
+    },
+    whenIdle: () => {
+      calls.idle = (calls.idle ?? 0) + 1
+      return Promise.resolve()
+    },
   }
   let route
   apply({
@@ -67,7 +78,7 @@ function fixture({ pending = false, attachments = [], verify = () => {} } = {}) 
     body: JSON.stringify({ sessionId: 'original-session', messageId: 'original', seq: 4,
       head: 9, texts: ['NEW'], ...override }),
   }))
-  return { writes, run }
+  return { writes, calls, run }
 }
 
 test('replaces a surface on one agent and follows up once with exact file and image references', async () => {
@@ -109,4 +120,64 @@ test('refuses stale identity, existing queue, and unreadable attachments without
   const missing = fixture({ attachments: [file], verify: () => { throw new Error('fixture') } })
   assert.match((await (await missing.run()).json()).error, /原附件无法读取/)
   assert.equal(missing.writes.length, 0)
+})
+
+test('interrupts a running round, then overwrites it with the edited body', async () => {
+  const { writes, calls, run } = fixture({ running: true })
+  // The head is stale on purpose: an interrupted turn appends its own closing
+  // events, so the request cannot promise the log still ends at `head`.
+  const response = await run({ interrupt: true, head: 7 })
+  assert.deepEqual(await response.json(), { ok: true })
+  assert.equal(calls.cancel, 1)
+  assert.deepEqual(calls.cause, { kind: 'user' })
+  assert.deepEqual(calls.options, { keepInbox: true })
+  assert.equal(calls.idle, 1)
+  assert.equal(writes.length, 2)
+  assert.deepEqual(writes[1].content, [text('NEW')])
+})
+
+test('interrupts by default even when the page did not ask for it', async () => {
+  const { writes, calls, run } = fixture({ running: true })
+  // A page whose running flag lagged behind a stop or a finish sends no flag at
+  // all; the host still owns the decision and stops what is actually running.
+  assert.deepEqual(await (await run()).json(), { ok: true })
+  assert.equal(calls.cancel, 1)
+  assert.equal(writes.length, 2)
+})
+
+test('stops the round even when the page still reported itself idle', async () => {
+  const { writes, calls, run } = fixture({ running: true })
+  // The page's running flag lags a stop or a finish; the host decides, so an
+  // explicit "not running" from the page cannot leave the user stuck.
+  assert.deepEqual(await (await run({ interrupt: false })).json(), { ok: true })
+  assert.equal(calls.cancel, 1)
+  assert.equal(writes.length, 2)
+})
+
+test('accepts an explicit no-interrupt flag from an idle editor', async () => {
+  const { writes, calls, run } = fixture()
+  assert.deepEqual(await (await run({ interrupt: false })).json(), { ok: true })
+  assert.equal(calls.cancel, 0)
+  assert.equal(writes.length, 2)
+  assert.equal((await run({ interrupt: 'yes' })).status, 400)
+})
+
+test('never discards queued input to make room for an edit', async () => {
+  const { writes, calls, run } = fixture({ pending: true })
+  const response = await run({ interrupt: true })
+  assert.equal(response.status, 409)
+  assert.match((await response.json()).error, /排队中的输入/)
+  assert.equal(calls.cancel, 0)
+  assert.equal(writes.length, 0)
+})
+
+test('verifies attachments before it stops the running round', async () => {
+  const { writes, calls, run } = fixture({
+    running: true, attachments: [file], verify: () => { throw new Error('fixture') },
+  })
+  const response = await run({ interrupt: true })
+  assert.equal(response.status, 409)
+  assert.match((await response.json()).error, /原附件无法读取/)
+  assert.equal(calls.cancel, 0)
+  assert.equal(writes.length, 0)
 })

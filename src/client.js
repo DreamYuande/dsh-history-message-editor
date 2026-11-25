@@ -239,6 +239,7 @@ function mountEditor(sessions, conversation) {
     if (editor) {
       const entry = [...controls].find(([, entry]) => entry.sessionId === editor.sessionId && entry.key === editor.node.key)
       if (entry) placeForm(editor, entry[0], entry[1].actions)
+      refreshChrome(editor)
     }
   }
 
@@ -270,15 +271,18 @@ function mountEditor(sessions, conversation) {
   })
   requestSweep()
 
-  function blocked(record, action = '编辑') {
+  // Only states the page cannot work around block the action. A running round is
+  // not one of them: submitting interrupts it and resends in a single step.
+  function unavailable(record) {
     const state = record.binding.session.getSnapshot()
-    if (state.running || state.awaitingFirstTurn || state.pendingSubmissions?.length) {
-      return `等当前回复和正在提交的输入结束后再${action}。`
-    }
     if (state.openState !== 'open' || state.removed || state.loadingOlder) {
       return '等当前会话的历史加载完成后再试。'
     }
     return ''
+  }
+
+  function busy(record) {
+    return record.binding.session.getSnapshot().running === true
   }
 
   function currentHead(binding) {
@@ -293,6 +297,16 @@ function mountEditor(sessions, conversation) {
     const idle = draft.save.dataset.busy !== 'busy'
     draft.save.disabled = !idle || pristine(draft)
     draft.form.toggleAttribute('data-pristine', pristine(draft))
+  }
+
+  // The footer tells the user what sending costs: a run in progress is stopped
+  // first, so the action reads as interrupt-and-resend instead of a plain send.
+  function refreshChrome(draft) {
+    const interrupting = busy(draft)
+    const label = interrupting ? '中断并重发' : '发送'
+    const impact = interrupting ? '覆盖此条及后续对话 · 发送时先中断当前回复' : '覆盖此条及后续对话'
+    if (draft.save.dataset.busy !== 'busy' && draft.save.textContent !== label) draft.save.textContent = label
+    if (draft.impact.textContent !== impact) draft.impact.textContent = impact
   }
 
   function openEditor(record, row, actions) {
@@ -315,8 +329,8 @@ function mountEditor(sessions, conversation) {
     const status = element('div', 'dsh-history-edit-status')
     status.setAttribute('role', 'status')
     const footer = element('div', 'dsh-history-edit-footer')
-    const detail = element('div', 'dsh-history-edit-impact', '覆盖此条及后续对话')
-    detail.title = '已执行的工具操作不会回退'
+    const impact = element('div', 'dsh-history-edit-impact', '覆盖此条及后续对话')
+    impact.title = '已执行的工具操作不会回退'
     const bar = element('div', 'dsh-history-edit-buttons')
     const dismiss = button('取消')
     const save = button('发送', 'dsh-history-edit-primary')
@@ -324,17 +338,18 @@ function mountEditor(sessions, conversation) {
     save.title = '覆盖此条及后续对话并重新生成'
     save.type = 'submit'
     bar.append(dismiss, save)
-    footer.append(detail, bar)
+    footer.append(impact, bar)
     form.append(status, footer)
     const draft = {
-      ...record, form, fields, status, dismiss, save,
+      ...record, form, fields, status, dismiss, save, impact,
       raw, initial: fields.map(field => field.value),
       row: null, bubble: null, head: currentHead(record.binding),
     }
     editor = draft
     placeForm(draft, row, actions)
-    status.textContent = blocked(draft)
+    status.textContent = unavailable(draft)
     syncSave(draft)
+    refreshChrome(draft)
     dismiss.addEventListener('click', () => endEdit(true))
     form.addEventListener('input', () => {
       status.textContent = ''
@@ -361,14 +376,14 @@ function mountEditor(sessions, conversation) {
 
   function verifySource(draft) {
     if (!stillEditing(draft)) throw new Error('会话已切换。')
-    const reason = blocked(draft)
+    const reason = unavailable(draft)
     if (reason) throw new Error(reason)
     const contentReason = findBlockReason(draft.node)
     if (contentReason) throw new Error(contentReason)
   }
 
   async function submit(draft) {
-    const { fields, raw, initial, form, status, save, dismiss, binding, node, sessionId, head } = draft
+    const { fields, raw, initial, form, status, save, dismiss, binding, node, sessionId } = draft
     const texts = fields.map((field, index) => field.value === initial[index] ? raw[index] : field.value)
     const parts = editedContent(node.data.content, texts)
     // The primary button stays greyed out until the body changes, so this only
@@ -378,22 +393,41 @@ function mountEditor(sessions, conversation) {
       status.textContent = '消息正文不能为空。'
       return
     }
+    // The page never waits for a reply to finish: the host stops whatever is
+    // still running before it writes the replacement. The flag below is only a
+    // hint about what the page saw, never a gate the host trusts.
+    const interrupting = busy(draft)
+    const head = currentHead(binding) ?? node.data.seq
     operation = draft
     form.setAttribute('aria-busy', 'true')
     save.dataset.busy = 'busy'
     for (const field of fields) field.readOnly = true
     dismiss.disabled = save.disabled = true
-    save.textContent = '提交中…'
+    save.textContent = interrupting ? '中断中…' : '提交中…'
     status.textContent = ''
+    let stopped = false
+    // Report what actually happens: a reply may still be streaming even when the
+    // snapshot said otherwise, and the host is the one that stops it.
+    const watch = setInterval(() => {
+      if (stopped) return
+      if (binding.session.getSnapshot().running) {
+        save.textContent = '中断中…'
+        status.textContent = '正在中断当前回复…'
+        return
+      }
+      stopped = true
+      save.textContent = '提交中…'
+      status.textContent = '正在覆盖这条消息…'
+      clearInterval(watch)
+    }, 200)
     try {
       verifySource(draft)
-      if (head === undefined || head !== currentHead(binding)) {
-        throw new Error('会话刚刚发生变化。请重新打开这条消息后再保存。')
-      }
       const response = await fetch('.' + overridePath, {
         method: 'POST', signal,
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId, messageId: node.data.messageId, seq: node.data.seq, head, texts }),
+        body: JSON.stringify({
+          sessionId, messageId: node.data.messageId, seq: node.data.seq, head, texts, interrupt: interrupting,
+        }),
       })
       const result = await response.json().catch(() => null)
       if (!response.ok || result?.ok !== true) {
@@ -404,6 +438,7 @@ function mountEditor(sessions, conversation) {
       if (!stillEditing(draft)) return
       status.textContent = error instanceof Error ? error.message : 'DSH 未确认操作结果。'
     } finally {
+      clearInterval(watch)
       operation = null
       form.removeAttribute('aria-busy')
       delete save.dataset.busy
@@ -411,18 +446,21 @@ function mountEditor(sessions, conversation) {
       for (const field of fields) field.readOnly = false
       save.textContent = '发送'
       syncSave(draft)
+      refreshChrome(draft)
     }
   }
 
   async function retryRound(record, control) {
-    const reason = blocked(record, '重试')
+    const reason = unavailable(record)
     if (reason) {
       notify(reason)
       return
     }
     const { binding, node, sessionId } = record
-    const head = currentHead(binding)
+    const interrupting = busy(record)
+    const head = currentHead(binding) ?? node.data.seq
     const texts = originalText(node.data.content)
+    if (interrupting) notify('正在中断当前回复，然后重试这一轮…')
     operation = { kind: 'retry' }
     control.dataset.busy = 'busy'
     control.setAttribute('aria-busy', 'true')
@@ -431,7 +469,10 @@ function mountEditor(sessions, conversation) {
       const response = await fetch('.' + overridePath, {
         method: 'POST', signal,
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId, messageId: node.data.messageId, seq: node.data.seq, head, texts, retry: true }),
+        body: JSON.stringify({
+          sessionId, messageId: node.data.messageId, seq: node.data.seq, head, texts,
+          retry: true, interrupt: interrupting,
+        }),
       })
       const result = await response.json().catch(() => null)
       if (!response.ok || result?.ok !== true) {
