@@ -37,17 +37,25 @@ test('only hides old ranges from this plugin', () => {  const entry = (start, en
   assert.equal(wasReplaced(ranges, 2), false)
 })
 
-function fixture({ pending = false, attachments = [], verify = () => {}, running = false } = {}) {
+function fixture({ queued = 0, steering = 0, attachments = [], verify = () => {}, running = false } = {}) {
   const original = { type: 'user/message', data: { id: 'original', source: { kind: 'user' }, content: [text('old'), ...attachments] } }
   const writes = []
-  const calls = { cancel: 0 }
+  const calls = { cancel: 0, cleared: 0 }
   const session = {
     seq: 10, eventAt: seq => seq === 4 ? original : undefined,
     surface: { nodes: [1, 4, 6, 8] },
     append: (...args) => { writes.push(args); session.seq++ },
   }
+  const pendingTurn = Array.from({ length: queued }, (_, index) => ({ id: `queued-${index}`, role: 'user', content: [text('later')] }))
+  const pendingStep = Array.from({ length: steering }, (_, index) => ({ id: `steer-${index}`, role: 'user', content: [text('context')] }))
   const agent = {
-    session, status: running ? 'running' : 'idle', inbox: { hasPending: pending },
+    session, status: running ? 'running' : 'idle',
+    inbox: {
+      nextTurn: pendingTurn,
+      nextStep: pendingStep,
+      get hasPending() { return this.nextTurn.length > 0 || this.nextStep.length > 0 },
+      clear() { calls.cleared++; this.nextTurn = []; this.nextStep = [] },
+    },
     model: { current: () => undefined },
     runMaintenance: action => action(new AbortController().signal),
     followup: value => writes.push(value),
@@ -55,6 +63,7 @@ function fixture({ pending = false, attachments = [], verify = () => {}, running
       calls.cancel++
       calls.cause = cause
       calls.options = options
+      if (!options?.keepInbox) agent.inbox.clear()
       agent.status = 'idle'
     },
     whenIdle: () => {
@@ -109,14 +118,11 @@ test('refuses an unchanged body unless the round is being retried', async () => 
   assert.equal(retried.writes[1].source.kind, 'user')
 })
 
-test('refuses stale identity, existing queue, and unreadable attachments without writing', async () => {
+test('refuses stale identity and unreadable attachments without writing', async () => {
   const { writes, run } = fixture()
   assert.equal((await run({ head: 8 })).status, 409)
   assert.equal((await run({ messageId: 'wrong' })).status, 409)
   assert.equal(writes.length, 0)
-  const busy = fixture({ pending: true })
-  assert.equal((await busy.run()).status, 409)
-  assert.equal(busy.writes.length, 0)
   const missing = fixture({ attachments: [file], verify: () => { throw new Error('fixture') } })
   assert.match((await (await missing.run()).json()).error, /原附件无法读取/)
   assert.equal(missing.writes.length, 0)
@@ -130,7 +136,7 @@ test('interrupts a running round, then overwrites it with the edited body', asyn
   assert.deepEqual(await response.json(), { ok: true })
   assert.equal(calls.cancel, 1)
   assert.deepEqual(calls.cause, { kind: 'user' })
-  assert.deepEqual(calls.options, { keepInbox: true })
+  assert.equal(calls.options, undefined)
   assert.equal(calls.idle, 1)
   assert.equal(writes.length, 2)
   assert.deepEqual(writes[1].content, [text('NEW')])
@@ -162,13 +168,31 @@ test('accepts an explicit no-interrupt flag from an idle editor', async () => {
   assert.equal((await run({ interrupt: 'yes' })).status, 400)
 })
 
-test('never discards queued input to make room for an edit', async () => {
-  const { writes, calls, run } = fixture({ pending: true })
-  const response = await run({ interrupt: true })
-  assert.equal(response.status, 409)
-  assert.match((await response.json()).error, /排队中的输入/)
+test('asks once before discarding a queued prompt, then discards it with the edit', async () => {
+  const { writes, calls, run } = fixture({ queued: 2 })
+  const refused = await run()
+  assert.equal(refused.status, 409)
+  const body = await refused.json()
+  assert.equal(body.queued, 2)
+  assert.match(body.error, /还有 2 条排队中的输入/)
   assert.equal(calls.cancel, 0)
   assert.equal(writes.length, 0)
+
+  const confirmed = await run({ discardQueue: true })
+  assert.deepEqual(await confirmed.json(), { ok: true, dropped: 2 })
+  assert.equal(calls.cancel, 1)
+  assert.equal(calls.cleared, 1)
+  assert.equal(writes.length, 2)
+})
+
+test('clears leftover steering context without asking, since no prompt is lost', async () => {
+  const { writes, calls, run } = fixture({ steering: 3 })
+  // Injected context and stale steering are not user prompts: an edit may drop
+  // them, which is what keeps a stopped session from reporting pending work.
+  assert.deepEqual(await (await run()).json(), { ok: true })
+  assert.equal(calls.cancel, 1)
+  assert.equal(calls.cleared, 1)
+  assert.equal(writes.length, 2)
 })
 
 test('verifies attachments before it stops the running round', async () => {

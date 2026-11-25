@@ -8,9 +8,10 @@ export const inject = ['connection', 'sessionController', 'agents', 'attachments
 const interruptTimeoutMs = 20000
 
 class OverrideError extends Error {
-  constructor(message, status = 409) {
+  constructor(message, status = 409, extra = undefined) {
     super(message)
     this.status = status
+    this.extra = extra
   }
 }
 
@@ -22,7 +23,8 @@ function validateRequest(body) {
     Array.isArray(body.texts) && body.texts.length > 0 &&
     body.texts.every(text => typeof text === 'string') &&
     (body.retry === undefined || body.retry === true) &&
-    (body.interrupt === undefined || typeof body.interrupt === 'boolean')
+    (body.interrupt === undefined || typeof body.interrupt === 'boolean') &&
+    (body.discardQueue === undefined || typeof body.discardQueue === 'boolean')
 }
 
 function userMessage(content, kind) {
@@ -94,21 +96,35 @@ function settled(agent) {
  * Stop the round that is still streaming so the replacement can be written.
  * The page never decides whether this is needed: its running flag lags the host
  * after a stop or a finish, so only the host knows what is actually running.
- * @returns whether this request interrupted work.
+ * @returns whether this request interrupted work, and how many user prompts it
+ *   had to discard with it.
  */
-async function stopRound(agent) {
-  if (agent.status === 'idle' && !agent.inbox.hasPending) return false
-  // Queued and steering input is the user's own work: it is never discarded to
-  // make room for an edit, so ask for it to be handled first.
-  if (agent.inbox.hasPending) {
-    throw new OverrideError('还有排队中的输入，先发送或删除它们再编辑。')
+async function stopRound(agent, input) {
+  const queued = agent.inbox.nextTurn?.length ?? 0
+  const steering = agent.inbox.nextStep?.length ?? 0
+  if (agent.status === 'idle' && queued === 0 && steering === 0) return { interrupted: false, dropped: 0 }
+  // A queued user prompt is the user's own work: it is only discarded with a
+  // second, explicit confirmation, never as a side effect of an edit.
+  if (queued > 0 && input.discardQueue !== true) {
+    throw new OverrideError(
+      `还有 ${queued} 条排队中的输入。再点一次发送会把它们一并丢弃并重发这一轮。`,
+      409,
+      { queued },
+    )
   }
   if (typeof agent.cancel !== 'function') {
     throw new OverrideError('当前 DSH 不支持中断正在生成的回复。')
   }
-  agent.cancel({ kind: 'user' }, { keepInbox: true })
+  // Without keepInbox the cancel also drops steering and stale injected context,
+  // which is what keeps a stopped session from reporting leftover pending work.
+  agent.cancel({ kind: 'user' })
   await settled(agent)
-  return true
+  if (agent.inbox.hasPending && typeof agent.inbox.clear === 'function') {
+    // Context re-injected around the aborted step would otherwise survive the
+    // cancel forever; it belongs to a step that will never run.
+    agent.inbox.clear()
+  }
+  return { interrupted: true, dropped: queued }
 }
 
 async function verifyAttachments(ctx, agent, content, signal) {
@@ -153,12 +169,12 @@ async function regenerate(ctx, input, signal) {
   const { content } = plan(session, input, strict)
   await verifyAttachments(ctx, agent, content, signal)
   signal.throwIfAborted()
-  await stopRound(agent)
+  const { dropped } = await stopRound(agent, input)
   signal.throwIfAborted()
   if (ctx.agents.get(input.sessionId) !== agent) {
     throw new OverrideError('会话刚刚切换，请重试。')
   }
-  if (agent.status !== 'idle' || agent.inbox.hasPending) {
+  if (agent.status !== 'idle') {
     throw new OverrideError('会话在中断之后又开始了新的生成，请重试。')
   }
   let committed = false
@@ -166,7 +182,6 @@ async function regenerate(ctx, input, signal) {
     await agent.runMaintenance(async maintenance => {
       signal.throwIfAborted()
       maintenance.throwIfAborted()
-      if (agent.inbox.hasPending) throw new OverrideError('还有排队中的输入，先处理它们再编辑。')
       const { shadowed } = plan(session, input, strict)
       const replacement = userMessage(content, 'user')
       // Maintenance holds the driver through both synchronous writes.
@@ -182,6 +197,7 @@ async function regenerate(ctx, input, signal) {
     if (committed) throw new OverrideError('已覆盖旧内容，但新消息未获确认。请查看当前会话后再发送。', 500)
     throw new OverrideError('会话正在处理其他操作，未覆盖旧内容。')
   }
+  return { dropped }
 }
 
 export function apply(ctx) {
@@ -200,12 +216,14 @@ export function apply(ctx) {
       }
       if (!validateRequest(input)) return Response.json({ error: '无法核对消息身份或正文。' }, { status: 400 })
       try {
-        await regenerate(ctx, input, request.signal)
-        return Response.json({ ok: true })
+        const { dropped } = await regenerate(ctx, input, request.signal)
+        return Response.json(dropped > 0 ? { ok: true, dropped } : { ok: true })
       } catch (error) {
         const known = error instanceof OverrideError
-        return Response.json({ error: known ? error.message : 'DSH 未确认操作结果，请查看当前会话。' },
-          { status: known ? error.status : 500 })
+        return Response.json(
+          known ? { error: error.message, ...error.extra } : { error: 'DSH 未确认操作结果，请查看当前会话。' },
+          { status: known ? error.status : 500 },
+        )
       }
     },
   })

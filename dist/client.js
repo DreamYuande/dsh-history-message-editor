@@ -139,6 +139,7 @@ function mountEditor(sessions, conversation) {
 
   const controls = new Map()
   const watched = new Map()
+  const queueConfirm = new Map()
   let shadowed = new Set()
   let frame = 0
   let editor = null
@@ -355,10 +356,15 @@ function mountEditor(sessions, conversation) {
 
   // The footer tells the user what sending costs: a run in progress is stopped
   // first, so the action reads as interrupt-and-resend instead of a plain send.
+  // A queued prompt needs one more click, which turns it into a discard.
   function refreshChrome(draft) {
     const interrupting = busy(draft)
-    const label = interrupting ? '中断并重发' : '发送'
-    const impact = interrupting ? '覆盖此条及后续对话 · 发送时先中断当前回复' : '覆盖此条及后续对话'
+    const label = draft.discardQueue
+      ? '丢弃并重发'
+      : interrupting ? '中断并重发' : '发送'
+    const impact = draft.discardQueue
+      ? '覆盖此条及后续对话 · 会一并丢弃排队中的输入'
+      : interrupting ? '覆盖此条及后续对话 · 发送时先中断当前回复' : '覆盖此条及后续对话'
     if (draft.save.dataset.busy !== 'busy' && draft.save.textContent !== label) draft.save.textContent = label
     if (draft.impact.textContent !== impact) draft.impact.textContent = impact
   }
@@ -397,7 +403,7 @@ function mountEditor(sessions, conversation) {
     const draft = {
       ...record, form, fields, status, dismiss, save, impact,
       raw, initial: fields.map(field => field.value),
-      row: null, bubble: null, head: currentHead(record.binding),
+      row: null, bubble: null, head: currentHead(record.binding), discardQueue: false,
     }
     editor = draft
     placeForm(draft, row, actions)
@@ -480,13 +486,21 @@ function mountEditor(sessions, conversation) {
         method: 'POST', signal,
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          sessionId, messageId: node.data.messageId, seq: node.data.seq, head, texts, interrupt: interrupting,
+          sessionId, messageId: node.data.messageId, seq: node.data.seq, head, texts,
+          interrupt: interrupting, discardQueue: draft.discardQueue === true,
         }),
       })
       const result = await response.json().catch(() => null)
       if (!response.ok || result?.ok !== true) {
+        // A queued prompt the host will not discard on its own: ask again through
+        // the action label instead of failing the edit outright.
+        if (typeof result?.queued === 'number') {
+          draft.discardQueue = true
+          refreshChrome(draft)
+        }
         throw new Error(result?.error || 'DSH 未确认提交，请查看当前会话状态。')
       }
+      if (result?.dropped > 0) notify(`已丢弃 ${result.dropped} 条排队输入。`)
       if (stillEditing(draft)) endEdit()
     } catch (error) {
       if (!stillEditing(draft)) return
@@ -514,6 +528,10 @@ function mountEditor(sessions, conversation) {
     const interrupting = busy(record)
     const head = currentHead(binding) ?? node.data.seq
     const texts = originalText(node.data.content)
+    // The retry trigger has no label to change, so a queued prompt is confirmed
+    // by pressing it again within a minute: the first press only reports it.
+    const confirmKey = `${sessionId}:${node.key}`
+    const discardQueue = (queueConfirm.get(confirmKey) ?? 0) > Date.now() - 60_000
     if (interrupting) notify('正在中断当前回复，然后重试这一轮…')
     operation = { kind: 'retry' }
     control.dataset.busy = 'busy'
@@ -525,13 +543,16 @@ function mountEditor(sessions, conversation) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           sessionId, messageId: node.data.messageId, seq: node.data.seq, head, texts,
-          retry: true, interrupt: interrupting,
+          retry: true, interrupt: interrupting, discardQueue,
         }),
       })
       const result = await response.json().catch(() => null)
       if (!response.ok || result?.ok !== true) {
+        if (typeof result?.queued === 'number') queueConfirm.set(confirmKey, Date.now())
         throw new Error(result?.error || 'DSH 未确认提交，请查看当前会话状态。')
       }
+      queueConfirm.delete(confirmKey)
+      if (result?.dropped > 0) notify(`已丢弃 ${result.dropped} 条排队输入。`)
     } catch (error) {
       if (!signal.aborted) notify(error instanceof Error ? error.message : 'DSH 未确认操作结果。')
     } finally {
