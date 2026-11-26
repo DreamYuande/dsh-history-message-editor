@@ -1,4 +1,4 @@
-# 历史消息编辑 1.3.1
+# 历史消息编辑 1.3.2
 
 在原会话里编辑历史用户消息，并从修改处重新生成；也可以对某一轮直接重试。会话 ID、侧栏条目和工作目录继续沿用。回复还在生成时也能编辑：发送会先中断当前这一轮，再覆盖消息重新发送。
 
@@ -6,7 +6,7 @@
 
 ![使用测试会话演示编辑区](assets/editor-preview.png)
 
-鼠标移到已发送的消息上，复制按钮旁会多出铅笔和重试两个按钮。
+已发送的消息上，复制按钮旁常驻铅笔（编辑）和重试两个按钮，与复制按钮一同显示，不需要悬停。
 
 - **编辑**：点击铅笔修改正文，正文没有改动时「发送」保持置灰，改回原文也会重新置灰。修改后点击「发送」，本次操作将覆盖这条消息及之后的聊天记录，继续使用同一个会话、侧栏条目和工作目录。取消编辑可点击「取消」或按 Esc。回复还在生成时同样可以打开编辑器，按钮会变成「中断并重发」：提交时先停止当前这一轮，等它停下来再写入新的正文并重新生成，中途断掉的半截回复一并被覆盖。
 - **重试**：点击重试按钮直接重跑这一轮，正文保持原样，用于模型请求失败、回复中途报错或想把这一轮重新生成一次的情况。重试与编辑共用覆盖逻辑，同样会覆盖这条消息之后的记录；回复生成中点击重试会先中断当前这一轮。
@@ -20,11 +20,11 @@
 
 ## 安装与升级
 
-在 DSH 插件管理器选择添加插件，输入 `dsh-history-message-editor@1.3.1`。也可以用 [GitHub Release 安装包](https://github.com/DreamYuande/dsh-history-message-editor/releases/download/v1.3.1/dsh-history-message-editor-1.3.1.tgz) 的链接安装，或下载后添加本地 `.tgz`。如果管理器提示已安装，可在插件详情里卸载旧版后更新。安装完成后按桌面提示重载。
+在 DSH 插件管理器选择添加插件，输入 `dsh-history-message-editor@1.3.2`。也可以用 [GitHub Release 安装包](https://github.com/DreamYuande/dsh-history-message-editor/releases/download/v1.3.2/dsh-history-message-editor-1.3.2.tgz) 的链接安装，或下载后添加本地 `.tgz`。如果管理器提示已安装，可在插件详情里卸载旧版后更新。安装完成后按桌面提示重载。
 
 ```powershell
-dsh plugin --profile desktop add dsh-history-message-editor@1.3.1
-dsh plugin --profile web add dsh-history-message-editor@1.3.1
+dsh plugin --profile desktop add dsh-history-message-editor@1.3.2
+dsh plugin --profile web add dsh-history-message-editor@1.3.2
 dsh plugin --profile desktop remove dsh-history-message-editor
 ```
 
@@ -51,4 +51,4 @@ pnpm pack
 
 Edit a previous user message and regenerate its reply in the same DSH session, or retry a round as it is. The editor reuses stored image and file references. Sending an edit replaces that message and later entries in the active model context and main chat view; the retry button sends the unchanged body through the same path, which is the quickest way to redo a round whose model request failed. While a reply is still streaming the button reads "interrupt and resend": the running round is stopped first, then the edited body is written and regenerated. The underlying event log keeps the original records. The workspace directory and existing tool side effects are retained.
 
-Tested with DSH Next 2.0.24-next on Windows (Harness 0.2.2-rc.5). Install `dsh-history-message-editor@1.3.1` in the DSH plugin manager or use the prebuilt tarball from [GitHub Releases](https://github.com/DreamYuande/dsh-history-message-editor/releases/tag/v1.3.1).
+Tested with DSH Next 2.0.24-next on Windows (Harness 0.2.2-rc.5). Install `dsh-history-message-editor@1.3.2` in the DSH plugin manager or use the prebuilt tarball from [GitHub Releases](https://github.com/DreamYuande/dsh-history-message-editor/releases/tag/v1.3.2).

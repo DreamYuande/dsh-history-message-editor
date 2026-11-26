@@ -67,13 +67,8 @@
   }
 }
 
-@media (hover: hover) {
-  [data-chat-node-key]:not(:hover):not(:focus-within) .dsh-history-edit-trigger,
-  [data-chat-node-key]:not(:hover):not(:focus-within) .dsh-history-retry-trigger {
-    opacity: 0;
-    pointer-events: none;
-  }
-}
+/* The edit and retry triggers sit in the same action slot as the native copy
+   button, so they stay visible with it instead of appearing on hover. */
 
 [data-message-bubble][data-dsh-history-edit-hidden],
 [data-dsh-history-editing] [data-slot="conversation.chat.node"] [data-clock="start"],
